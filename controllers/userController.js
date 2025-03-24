@@ -151,17 +151,87 @@ const getUserStats = asyncHandler(async (req, res) => {
     throw new ErrorResponse('Usuário não encontrado', 404);
   }
 
+  // Estatísticas básicas
+  const eventsOrganized = await Event.countDocuments({ organizer: user._id });
+  const eventsParticipating = await Event.countDocuments({ participants: user._id });
+  const activeEvents = await Event.countDocuments({ 
+    organizer: user._id,
+    status: 'ativo'
+  });
+  const canceledEvents = await Event.countDocuments({
+    organizer: user._id,
+    status: 'cancelado'
+  });
+
+  // Obter todos os eventos organizados pelo usuário para cálculos avançados
+  const userEvents = await Event.find({ organizer: user._id });
+  
+  // Calcular total de participantes e média
+  let totalParticipants = 0;
+  userEvents.forEach(event => {
+    totalParticipants += event.participants.length;
+  });
+  
+  const avgParticipantsPerEvent = eventsOrganized > 0 
+    ? (totalParticipants / eventsOrganized).toFixed(2) 
+    : 0;
+
+  // Calcular eventos por mês (últimos 12 meses)
+  const eventsByMonth = {};
+  const now = new Date();
+  
+  // Inicializar contagem para os últimos 12 meses
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(now);
+    d.setMonth(now.getMonth() - i);
+    // Formato ISO para o primeiro dia do mês (YYYY-MM-01)
+    const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+    eventsByMonth[monthKey] = {
+      count: 0,
+      month: d.getMonth(),
+      year: d.getFullYear()
+    };
+  }
+  
+  // Contar eventos por mês
+  userEvents.forEach(event => {
+    const eventDate = new Date(event.createdAt);
+    // Só considerar eventos dos últimos 12 meses
+    const monthDiff = (now.getFullYear() - eventDate.getFullYear()) * 12 + 
+                      now.getMonth() - eventDate.getMonth();
+    
+    if (monthDiff >= 0 && monthDiff < 12) {
+      // Formato ISO para o primeiro dia do mês (YYYY-MM-01)
+      const monthKey = `${eventDate.getFullYear()}-${String(eventDate.getMonth() + 1).padStart(2, '0')}-01`;
+      
+      // Incrementar contador para este mês
+      if (eventsByMonth[monthKey]) {
+        eventsByMonth[monthKey].count++;
+      }
+    }
+  });
+
+  // Retornar estatísticas completas
   const stats = {
-    eventsOrganized: await Event.countDocuments({ organizer: user._id }),
-    eventsParticipating: await Event.countDocuments({ participants: user._id }),
-    activeEvents: await Event.countDocuments({ 
-      organizer: user._id,
-      status: 'ativo'
-    }),
-    canceledEvents: await Event.countDocuments({
-      organizer: user._id,
-      status: 'cancelado'
-    })
+    // Estatísticas básicas
+    eventsOrganized,
+    eventsParticipating,
+    activeEvents,
+    canceledEvents,
+    
+    // Estatísticas avançadas
+    participantsStats: {
+      totalParticipants,
+      avgParticipantsPerEvent: parseFloat(avgParticipantsPerEvent)
+    },
+    
+    // Distribuição temporal
+    eventsByMonth: Object.entries(eventsByMonth)
+      .map(([date, data]) => ({
+        date,  // Data em formato ISO (YYYY-MM-01)
+        count: data.count
+      }))
+      .sort((a, b) => b.date.localeCompare(a.date))  // Ordena por data (mais recente primeiro)
   };
 
   res.json(stats);

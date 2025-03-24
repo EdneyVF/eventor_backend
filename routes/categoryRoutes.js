@@ -6,12 +6,14 @@ const {
   getCategoryById,
   createCategory,
   updateCategory,
-  deleteCategory
+  deleteCategory,
+  getCategoryStats
 } = require('../controllers/categoryController');
 
 // Rotas públicas
 router.route('/').get(getCategories);
 router.route('/:id').get(getCategoryById);
+router.route('/:id/stats').get(getCategoryStats);
 
 // Rotas protegidas (admin)
 router.route('/').post(protect, admin, createCategory);

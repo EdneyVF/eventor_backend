@@ -125,10 +125,75 @@ const deleteCategory = asyncHandler(async (req, res) => {
   });
 });
 
+// @desc    Obter estatísticas de uma categoria específica
+// @route   GET /api/categories/:id/stats
+// @access  Public
+const getCategoryStats = asyncHandler(async (req, res) => {
+  const category = await Category.findById(req.params.id);
+  
+  if (!category) {
+    throw new ErrorResponse('Categoria não encontrada', 404);
+  }
+  
+  // Se a categoria estiver inativa e o usuário não for admin
+  if (!category.active && (!req.user || req.user.role !== 'admin')) {
+    throw new ErrorResponse('Categoria não encontrada', 404);
+  }
+  
+  // Filtro para eventos
+  const eventFilter = { 
+    category: category._id 
+  };
+  
+  // Usuários normais só veem eventos aprovados e ativos
+  if (!req.user || req.user.role !== 'admin') {
+    eventFilter.approvalStatus = 'aprovado';
+    eventFilter.status = 'ativo';
+  }
+  
+  // Obter todos os eventos da categoria
+  const events = await Event.find(eventFilter)
+    .select('status participants');
+  
+  // Calcular estatísticas
+  let totalParticipants = 0;
+  events.forEach(event => {
+    totalParticipants += event.participants.length;
+  });
+  
+  const eventsCount = events.length;
+  const avgParticipantsPerEvent = eventsCount > 0 
+    ? (totalParticipants / eventsCount).toFixed(2) 
+    : 0;
+  
+  // Eventos agrupados por status
+  const eventsByStatus = {
+    ativo: events.filter(e => e.status === 'ativo').length,
+    cancelado: events.filter(e => e.status === 'cancelado').length,
+    finalizado: events.filter(e => e.status === 'finalizado').length
+  };
+  
+  // Retornar estatísticas
+  res.json({
+    category: {
+      _id: category._id,
+      name: category.name,
+      description: category.description
+    },
+    stats: {
+      eventsCount,
+      totalParticipants,
+      avgParticipantsPerEvent: parseFloat(avgParticipantsPerEvent),
+      eventsByStatus
+    }
+  });
+});
+
 module.exports = {
   getCategories,
   getCategoryById,
   createCategory,
   updateCategory,
-  deleteCategory
+  deleteCategory,
+  getCategoryStats
 }; 

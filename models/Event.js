@@ -82,7 +82,7 @@ const eventSchema = new mongoose.Schema({
   }],
   status: {
     type: String,
-    enum: ['ativo', 'cancelado', 'finalizado'],
+    enum: ['ativo', 'cancelado', 'finalizado', 'inativo'],
     default: 'ativo'
   },
   approvalStatus: {
@@ -129,6 +129,7 @@ eventSchema.methods.approve = async function(adminId) {
   this.approvedBy = adminId;
   this.approvalDate = new Date();
   this.rejectionReason = null;
+  this.status = 'ativo';
   await this.save();
 };
 
@@ -137,7 +138,7 @@ eventSchema.methods.reject = async function(adminId, reason) {
   this.approvedBy = adminId;
   this.approvalDate = new Date();
   this.rejectionReason = reason;
-  this.status = 'cancelado';
+  this.status = 'inativo';
   await this.save();
 };
 
@@ -151,6 +152,17 @@ eventSchema.pre('save', async function(next) {
       this.approvalStatus = 'aprovado';
       this.approvedBy = this.organizer;
       this.approvalDate = new Date();
+      this.status = 'ativo';
+    } else {
+      // Para eventos criados por usuários normais, aguardando aprovação
+      this.status = 'inativo';
+    }
+  } else if (this.isModified('approvalStatus')) {
+    // Quando o status de aprovação é modificado, atualizar o status do evento
+    if (this.approvalStatus === 'aprovado') {
+      this.status = 'ativo';
+    } else if (this.approvalStatus === 'rejeitado' || this.approvalStatus === 'pendente') {
+      this.status = 'inativo';
     }
   }
   next();

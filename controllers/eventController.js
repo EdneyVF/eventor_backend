@@ -126,7 +126,10 @@ const searchEvents = asyncHandler(async (req, res) => {
   // Apenas eventos aprovados para usuários não-admin
   if (!req.user || req.user.role !== 'admin') {
     query.approvalStatus = 'aprovado';
-    query.status = 'ativo';
+    // Se um status específico não for solicitado, mostrar apenas eventos ativos
+    if (!req.query.status) {
+      query.status = 'ativo';
+    }
   }
   
   // Ordenação
@@ -208,51 +211,146 @@ const createEvent = asyncHandler(async (req, res) => {
     tags
   } = req.body;
 
+  // Validar campos obrigatórios
+  if (!title || !description || !date || !location || !category || !capacity) {
+    throw new ErrorResponse('Título, descrição, data, localização, categoria e capacidade são obrigatórios', 400);
+  }
+
+  // Validar título e descrição
+  if (title.length < 3 || title.length > 100) {
+    throw new ErrorResponse('Título deve ter entre 3 e 100 caracteres', 400);
+  }
+
+  if (description.length < 10) {
+    throw new ErrorResponse('Descrição deve ter pelo menos 10 caracteres', 400);
+  }
+
+  // Validar capacidade
+  if (capacity < 1) {
+    throw new ErrorResponse('Capacidade deve ser pelo menos 1', 400);
+  }
+
   // Validar categoria
   const categoryExists = await Category.findById(category);
   if (!categoryExists) {
     throw new ErrorResponse('Categoria não encontrada', 404);
   }
 
+  // Verificar se a categoria está ativa
+  if (!categoryExists.active) {
+    throw new ErrorResponse('Esta categoria está inativa e não pode ser usada', 400);
+  }
+
   // Validar localização
-  if (!location || !location.address || !location.city || !location.state) {
+  if (!location.address || !location.city || !location.state) {
     throw new ErrorResponse('Endereço, cidade e estado são obrigatórios', 400);
   }
 
   // Validar data
-  const eventDate = new Date(date);
-  if (eventDate <= new Date()) {
+  let eventDate;
+  try {
+    eventDate = new Date(date);
+    if (isNaN(eventDate.getTime())) {
+      throw new Error();
+    }
+  } catch (error) {
+    throw new ErrorResponse('Formato de data inválido', 400);
+  }
+  
+  const now = new Date();
+  if (eventDate <= now) {
     throw new ErrorResponse('A data do evento deve ser futura', 400);
   }
 
   // Validar data de término
+  let eventEndDate;
   if (endDate) {
-    const eventEndDate = new Date(endDate);
+    try {
+      eventEndDate = new Date(endDate);
+      if (isNaN(eventEndDate.getTime())) {
+        throw new Error();
+      }
+    } catch (error) {
+      throw new ErrorResponse('Formato de data de término inválido', 400);
+    }
+    
     if (eventEndDate <= eventDate) {
       throw new ErrorResponse('A data de término deve ser posterior à data de início', 400);
     }
   }
 
-  // Criar evento
-  const event = await Event.create({
+  // Validar preço
+  let eventPrice = 0;
+  if (price !== undefined) {
+    eventPrice = parseFloat(price);
+    if (isNaN(eventPrice) || eventPrice < 0) {
+      throw new ErrorResponse('Preço deve ser um valor não-negativo', 400);
+    }
+  }
+
+  // Validar tags
+  let eventTags = [];
+  if (tags) {
+    if (Array.isArray(tags)) {
+      eventTags = tags;
+    } else if (typeof tags === 'string') {
+      eventTags = tags.split(',').map(tag => tag.trim());
+    }
+    
+    // Limitar quantidade de tags
+    if (eventTags.length > 10) {
+      throw new ErrorResponse('Máximo de 10 tags permitidas', 400);
+    }
+    
+    // Validar cada tag
+    eventTags.forEach(tag => {
+      if (tag.length < 3 || tag.length > 30) {
+        throw new ErrorResponse('Cada tag deve ter entre 3 e 30 caracteres', 400);
+      }
+    });
+  }
+
+  // Preparar dados do evento
+  const eventData = {
     title,
     description,
-    date,
-    endDate,
+    date: eventDate,
     location,
     category,
     capacity,
-    price: price || 0,
     organizer: req.user._id,
-    tags: tags || [],
-    approvalStatus: req.user.role === 'admin' ? 'aprovado' : 'pendente'
-  });
+    approvalStatus: req.user.role === 'admin' ? 'aprovado' : 'pendente',
+    price: eventPrice,
+    tags: eventTags
+  };
+  
+  // Definir status com base no status de aprovação
+  eventData.status = eventData.approvalStatus === 'aprovado' ? 'ativo' : 'inativo';
+  
+  // Adicionar data de término se fornecida
+  if (eventEndDate) {
+    eventData.endDate = eventEndDate;
+  }
 
+  // Criar evento
+  const event = await Event.create(eventData);
+
+  // Retornar evento com dados populados
   const populatedEvent = await Event.findById(event._id)
     .populate('category', 'name')
     .populate('organizer', 'name email');
 
-  res.status(201).json(populatedEvent);
+  // Adicionar flag informando se o evento precisa de aprovação
+  const result = populatedEvent.toObject();
+  result.needsApproval = result.approvalStatus === 'pendente';
+
+  res.status(201).json({
+    success: true,
+    message: result.needsApproval 
+      ? 'Evento criado com sucesso e aguardando aprovação' 
+      : 'Evento criado com sucesso',
+    event: result
+  });
 });
 
 // @desc    Obter evento por ID
@@ -296,9 +394,9 @@ const updateEvent = asyncHandler(async (req, res) => {
     throw new ErrorResponse('Não autorizado', 403);
   }
 
-  // Não permitir alterações em eventos finalizados/cancelados
-  if (event.status !== 'ativo') {
-    throw new ErrorResponse('Não é possível alterar eventos finalizados ou cancelados', 400);
+  // Não permitir alterações em eventos cancelados
+  if (event.status === 'cancelado') {
+    throw new ErrorResponse('Não é possível alterar eventos cancelados', 400);
   }
 
   // Validações específicas
@@ -330,6 +428,8 @@ const updateEvent = asyncHandler(async (req, res) => {
       req.body.approvalStatus = 'pendente';
       req.body.approvedBy = null;
       req.body.approvalDate = null;
+      // Definir status como inativo quando aprovação pendente
+      req.body.status = 'inativo';
     }
   }
 
@@ -342,7 +442,13 @@ const updateEvent = asyncHandler(async (req, res) => {
     .populate('organizer', 'name email')
     .populate('participants', 'name email');
 
-  res.json(event);
+  res.json({
+    success: true,
+    message: event.approvalStatus === 'pendente' 
+      ? 'Evento atualizado com sucesso e aguardando aprovação' 
+      : 'Evento atualizado com sucesso',
+    event
+  });
 });
 
 // @desc    Deletar evento
@@ -384,8 +490,8 @@ const participateEvent = asyncHandler(async (req, res) => {
     throw new ErrorResponse('Evento não encontrado', 404);
   }
 
-  // Verificar se evento está ativo e aprovado
-  if (event.status !== 'ativo' || event.approvalStatus !== 'aprovado') {
+  // Verificar se evento está ativo
+  if (event.status !== 'ativo') {
     throw new ErrorResponse('Evento não está disponível para participação', 400);
   }
 
@@ -466,6 +572,127 @@ const cancelEvent = asyncHandler(async (req, res) => {
   });
 });
 
+// @desc    Listar eventos criados pelo usuário
+// @route   GET /api/events/my-events
+// @access  Private
+const getUserEvents = asyncHandler(async (req, res) => {
+  const page = parseInt(req.query.page, 10) || 1;
+  const limit = parseInt(req.query.limit, 10) || 10;
+  const startIndex = (page - 1) * limit;
+  
+  // Filtro base: eventos organizados pelo usuário
+  const query = {
+    organizer: req.user._id
+  };
+  
+  // Filtro adicional por status (se fornecido)
+  if (req.query.status && ['ativo', 'cancelado', 'finalizado'].includes(req.query.status)) {
+    query.status = req.query.status;
+  }
+
+  // Filtro adicional por status de aprovação (se fornecido)
+  if (req.query.approvalStatus && ['pendente', 'aprovado', 'rejeitado'].includes(req.query.approvalStatus)) {
+    query.approvalStatus = req.query.approvalStatus;
+  }
+  
+  // Calcular total de eventos
+  const total = await Event.countDocuments(query);
+  
+  // Buscar eventos com paginação
+  const events = await Event.find(query)
+    .populate('category', 'name')
+    .populate({
+      path: 'participants',
+      select: 'name email',
+      options: { limit: 5 } // Limitar número de participantes retornados
+    })
+    .sort({ createdAt: -1 }) // Ordenar por data de criação (mais recente primeiro)
+    .skip(startIndex)
+    .limit(limit);
+  
+  // Retornar eventos com metadados
+  res.json({
+    events,
+    page,
+    pages: Math.ceil(total / limit),
+    total,
+    counts: {
+      total: await Event.countDocuments({ organizer: req.user._id }),
+      active: await Event.countDocuments({ organizer: req.user._id, status: 'ativo' }),
+      canceled: await Event.countDocuments({ organizer: req.user._id, status: 'cancelado' }),
+      finished: await Event.countDocuments({ organizer: req.user._id, status: 'finalizado' }),
+      pending: await Event.countDocuments({ organizer: req.user._id, approvalStatus: 'pendente' }),
+      approved: await Event.countDocuments({ organizer: req.user._id, approvalStatus: 'aprovado' }),
+      rejected: await Event.countDocuments({ organizer: req.user._id, approvalStatus: 'rejeitado' })
+    }
+  });
+});
+
+// @desc    Listar eventos que o usuário está participando
+// @route   GET /api/events/participating
+// @access  Private
+const getUserParticipatingEvents = asyncHandler(async (req, res) => {
+  const page = parseInt(req.query.page, 10) || 1;
+  const limit = parseInt(req.query.limit, 10) || 10;
+  const startIndex = (page - 1) * limit;
+  
+  // Filtro base: eventos em que o usuário é participante
+  let query = {
+    participants: req.user._id
+  };
+  
+  // Filtro adicional por status, padrão é 'ativo'
+  query.status = req.query.status || 'ativo';
+  
+  // Por padrão, mostrar apenas eventos aprovados
+  query.approvalStatus = 'aprovado';
+  
+  // Filtro adicional por data (passados/futuros)
+  if (req.query.when === 'past') {
+    query.date = { $lt: new Date() };
+  } else if (req.query.when === 'future' || !req.query.when) {
+    // Padrão: eventos futuros
+    query.date = { $gte: new Date() };
+  }
+  
+  // Calcular total de eventos
+  const total = await Event.countDocuments(query);
+  
+  // Buscar eventos com paginação
+  const events = await Event.find(query)
+    .populate('category', 'name')
+    .populate('organizer', 'name email')
+    .sort({ date: 1 }) // Ordenar por data (próximos eventos primeiro)
+    .skip(startIndex)
+    .limit(limit);
+  
+  // Retornar eventos com metadados
+  res.json({
+    events,
+    page,
+    pages: Math.ceil(total / limit),
+    total,
+    counts: {
+      upcoming: await Event.countDocuments({
+        participants: req.user._id,
+        status: 'ativo',
+        approvalStatus: 'aprovado',
+        date: { $gte: new Date() }
+      }),
+      past: await Event.countDocuments({
+        participants: req.user._id,
+        status: { $in: ['ativo', 'finalizado'] },
+        approvalStatus: 'aprovado',
+        date: { $lt: new Date() }
+      }),
+      canceled: await Event.countDocuments({
+        participants: req.user._id,
+        status: 'cancelado'
+      })
+    }
+  });
+});
+
 module.exports = {
   searchEvents,
   createEvent,
@@ -474,5 +701,7 @@ module.exports = {
   deleteEvent,
   participateEvent,
   cancelParticipation,
-  cancelEvent
+  cancelEvent,
+  getUserEvents,
+  getUserParticipatingEvents
 };

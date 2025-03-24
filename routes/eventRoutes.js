@@ -9,17 +9,24 @@ const {
   deleteEvent,
   participateEvent,
   cancelParticipation,
-  cancelEvent
+  cancelEvent,
+  getUserEvents,
+  getUserParticipatingEvents
 } = require('../controllers/eventController');
 
-// Rotas públicas
+// Rota de busca pública
 router.get('/', searchEvents);
-router.get('/:id', getEventById);
 
 // Rotas que requerem autenticação
 router.use(protect);
 
+// Rotas para listar eventos do usuário (devem vir ANTES das rotas com parâmetros)
+router.get('/my-events', getUserEvents);
+router.get('/participating', getUserParticipatingEvents);
+
+// Rotas para eventos específicos
 router.post('/', createEvent);
+router.get('/:id', getEventById);
 router.put('/:id', updateEvent);
 router.delete('/:id', deleteEvent);
 
