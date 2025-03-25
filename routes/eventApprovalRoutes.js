@@ -2,21 +2,23 @@ const express = require('express');
 const router = express.Router();
 const { protect, admin } = require('../middlewares/authMiddleware');
 const {
-  getPendingEvents,
+  listPendingEvents,
   approveEvent,
   rejectEvent,
   getApprovalStatus
 } = require('../controllers/eventApprovalController');
 
-// Rotas que requerem autenticação de admin
+// Protected routes
 router.use(protect);
 
-// Rotas públicas para usuários autenticados
+// Event approval status route (accessible to authenticated users)
 router.get('/:id/approval-status', getApprovalStatus);
 
-// Rotas que requerem privilégios de admin
+// Admin only routes
 router.use(admin);
-router.get('/pending', getPendingEvents);
+
+// Event approval management routes
+router.get('/approval/pending', listPendingEvents);
 router.put('/:id/approve', approveEvent);
 router.put('/:id/reject', rejectEvent);
 

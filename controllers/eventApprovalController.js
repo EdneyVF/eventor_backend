@@ -2,21 +2,25 @@ const asyncHandler = require('express-async-handler');
 const Event = require('../models/Event');
 const ErrorResponse = require('../utils/errorResponse');
 
-// @desc    Listar eventos pendentes de aprovação
-// @route   GET /api/events/pending
-// @access  Admin
-const getPendingEvents = asyncHandler(async (req, res) => {
-  const events = await Event.find({ approvalStatus: 'pendente' })
+// @desc    List pending events
+// @route   GET /api/events/approval/pending
+// @access  Private/Admin
+const listPendingEvents = asyncHandler(async (req, res) => {
+  const events = await Event.find({ approvalStatus: 'pending' })
     .populate('organizer', 'name email')
     .populate('category', 'name')
-    .sort({ createdAt: -1 });
+    .sort('-createdAt');
 
-  res.json(events);
+  res.json({
+    success: true,
+    count: events.length,
+    events
+  });
 });
 
-// @desc    Aprovar um evento
+// @desc    Approve an event
 // @route   PUT /api/events/:id/approve
-// @access  Admin
+// @access  Private/Admin
 const approveEvent = asyncHandler(async (req, res) => {
   const event = await Event.findById(req.params.id);
 
@@ -24,8 +28,8 @@ const approveEvent = asyncHandler(async (req, res) => {
     throw new ErrorResponse('Evento não encontrado', 404);
   }
 
-  if (event.approvalStatus === 'aprovado') {
-    throw new ErrorResponse('Evento já está aprovado', 400);
+  if (event.approvalStatus !== 'pending') {
+    throw new ErrorResponse('Evento não está pendente de aprovação', 400);
   }
 
   await event.approve(req.user._id);
@@ -37,9 +41,9 @@ const approveEvent = asyncHandler(async (req, res) => {
   });
 });
 
-// @desc    Rejeitar um evento
+// @desc    Reject an event
 // @route   PUT /api/events/:id/reject
-// @access  Admin
+// @access  Private/Admin
 const rejectEvent = asyncHandler(async (req, res) => {
   const { reason } = req.body;
 
@@ -53,8 +57,8 @@ const rejectEvent = asyncHandler(async (req, res) => {
     throw new ErrorResponse('Evento não encontrado', 404);
   }
 
-  if (event.approvalStatus === 'rejeitado') {
-    throw new ErrorResponse('Evento já está rejeitado', 400);
+  if (event.approvalStatus !== 'pending') {
+    throw new ErrorResponse('Evento não está pendente de aprovação', 400);
   }
 
   await event.reject(req.user._id, reason);
@@ -66,7 +70,7 @@ const rejectEvent = asyncHandler(async (req, res) => {
   });
 });
 
-// @desc    Obter status de aprovação de um evento
+// @desc    Get event approval status
 // @route   GET /api/events/:id/approval-status
 // @access  Private
 const getApprovalStatus = asyncHandler(async (req, res) => {
@@ -78,11 +82,14 @@ const getApprovalStatus = asyncHandler(async (req, res) => {
     throw new ErrorResponse('Evento não encontrado', 404);
   }
 
-  res.json(event);
+  res.json({
+    success: true,
+    data: event
+  });
 });
 
 module.exports = {
-  getPendingEvents,
+  listPendingEvents,
   approveEvent,
   rejectEvent,
   getApprovalStatus

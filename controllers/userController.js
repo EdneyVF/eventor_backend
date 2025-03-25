@@ -117,7 +117,7 @@ const deleteUser = asyncHandler(async (req, res) => {
   // Verificar se usuário tem eventos ativos
   const activeEvents = await Event.find({
     organizer: user._id,
-    status: 'ativo'
+    status: 'active'
   });
 
   if (activeEvents.length > 0) {
@@ -156,11 +156,11 @@ const getUserStats = asyncHandler(async (req, res) => {
   const eventsParticipating = await Event.countDocuments({ participants: user._id });
   const activeEvents = await Event.countDocuments({ 
     organizer: user._id,
-    status: 'ativo'
+    status: 'active'
   });
   const canceledEvents = await Event.countDocuments({
     organizer: user._id,
-    status: 'cancelado'
+    status: 'canceled'
   });
 
   // Obter todos os eventos organizados pelo usuário para cálculos avançados

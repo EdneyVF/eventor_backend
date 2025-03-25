@@ -147,8 +147,8 @@ const getCategoryStats = asyncHandler(async (req, res) => {
   
   // Usuários normais só veem eventos aprovados e ativos
   if (!req.user || req.user.role !== 'admin') {
-    eventFilter.approvalStatus = 'aprovado';
-    eventFilter.status = 'ativo';
+    eventFilter.approvalStatus = 'approved';
+    eventFilter.status = 'active';
   }
   
   // Obter todos os eventos da categoria
@@ -168,9 +168,9 @@ const getCategoryStats = asyncHandler(async (req, res) => {
   
   // Eventos agrupados por status
   const eventsByStatus = {
-    ativo: events.filter(e => e.status === 'ativo').length,
-    cancelado: events.filter(e => e.status === 'cancelado').length,
-    finalizado: events.filter(e => e.status === 'finalizado').length
+    active: events.filter(e => e.status === 'active').length,
+    canceled: events.filter(e => e.status === 'canceled').length,
+    finished: events.filter(e => e.status === 'finished').length
   };
   
   // Retornar estatísticas

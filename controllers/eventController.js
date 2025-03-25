@@ -125,10 +125,10 @@ const searchEvents = asyncHandler(async (req, res) => {
   
   // Apenas eventos aprovados para usuários não-admin
   if (!req.user || req.user.role !== 'admin') {
-    query.approvalStatus = 'aprovado';
+    query.approvalStatus = 'approved';
     // Se um status específico não for solicitado, mostrar apenas eventos ativos
     if (!req.query.status) {
-      query.status = 'ativo';
+      query.status = 'active';
     }
   }
   
@@ -319,13 +319,13 @@ const createEvent = asyncHandler(async (req, res) => {
     category,
     capacity,
     organizer: req.user._id,
-    approvalStatus: req.user.role === 'admin' ? 'aprovado' : 'pendente',
+    approvalStatus: req.user.role === 'admin' ? 'approved' : 'pending',
     price: eventPrice,
     tags: eventTags
   };
   
   // Definir status com base no status de aprovação
-  eventData.status = eventData.approvalStatus === 'aprovado' ? 'ativo' : 'inativo';
+  eventData.status = eventData.approvalStatus === 'approved' ? 'active' : 'inactive';
   
   // Adicionar data de término se fornecida
   if (eventEndDate) {
@@ -342,7 +342,7 @@ const createEvent = asyncHandler(async (req, res) => {
 
   // Adicionar flag informando se o evento precisa de aprovação
   const result = populatedEvent.toObject();
-  result.needsApproval = result.approvalStatus === 'pendente';
+  result.needsApproval = result.approvalStatus === 'pending';
 
   res.status(201).json({
     success: true,
@@ -368,7 +368,7 @@ const getEventById = asyncHandler(async (req, res) => {
   }
 
   // Verificar se o evento não aprovado pode ser visto
-  if (event.approvalStatus !== 'aprovado' && 
+  if (event.approvalStatus !== 'approved' && 
       (!req.user || 
        (req.user.role !== 'admin' && 
         event.organizer._id.toString() !== req.user._id.toString()))) {
@@ -395,7 +395,7 @@ const updateEvent = asyncHandler(async (req, res) => {
   }
 
   // Não permitir alterações em eventos cancelados
-  if (event.status === 'cancelado') {
+  if (event.status === 'canceled') {
     throw new ErrorResponse('Não é possível alterar eventos cancelados', 400);
   }
 
@@ -425,11 +425,11 @@ const updateEvent = asyncHandler(async (req, res) => {
     ) || (req.body.location !== undefined);
     
     if (significantChanges) {
-      req.body.approvalStatus = 'pendente';
+      req.body.approvalStatus = 'pending';
       req.body.approvedBy = null;
       req.body.approvalDate = null;
       // Definir status como inativo quando aprovação pendente
-      req.body.status = 'inativo';
+      req.body.status = 'inactive';
     }
   }
 
@@ -444,7 +444,7 @@ const updateEvent = asyncHandler(async (req, res) => {
 
   res.json({
     success: true,
-    message: event.approvalStatus === 'pendente' 
+    message: event.approvalStatus === 'pending' 
       ? 'Evento atualizado com sucesso e aguardando aprovação' 
       : 'Evento atualizado com sucesso',
     event
@@ -491,7 +491,7 @@ const participateEvent = asyncHandler(async (req, res) => {
   }
 
   // Verificar se evento está ativo
-  if (event.status !== 'ativo') {
+  if (event.status !== 'active') {
     throw new ErrorResponse('Evento não está disponível para participação', 400);
   }
 
@@ -559,11 +559,11 @@ const cancelEvent = asyncHandler(async (req, res) => {
   }
 
   // Verificar se já está cancelado
-  if (event.status === 'cancelado') {
+  if (event.status === 'canceled') {
     throw new ErrorResponse('Evento já está cancelado', 400);
   }
 
-  event.status = 'cancelado';
+  event.status = 'canceled';
   await event.save();
 
   res.json({
@@ -586,12 +586,12 @@ const getUserEvents = asyncHandler(async (req, res) => {
   };
   
   // Filtro adicional por status (se fornecido)
-  if (req.query.status && ['ativo', 'cancelado', 'finalizado'].includes(req.query.status)) {
+  if (req.query.status && ['active', 'canceled', 'finished'].includes(req.query.status)) {
     query.status = req.query.status;
   }
 
   // Filtro adicional por status de aprovação (se fornecido)
-  if (req.query.approvalStatus && ['pendente', 'aprovado', 'rejeitado'].includes(req.query.approvalStatus)) {
+  if (req.query.approvalStatus && ['pending', 'approved', 'rejected'].includes(req.query.approvalStatus)) {
     query.approvalStatus = req.query.approvalStatus;
   }
   
@@ -618,12 +618,12 @@ const getUserEvents = asyncHandler(async (req, res) => {
     total,
     counts: {
       total: await Event.countDocuments({ organizer: req.user._id }),
-      active: await Event.countDocuments({ organizer: req.user._id, status: 'ativo' }),
-      canceled: await Event.countDocuments({ organizer: req.user._id, status: 'cancelado' }),
-      finished: await Event.countDocuments({ organizer: req.user._id, status: 'finalizado' }),
-      pending: await Event.countDocuments({ organizer: req.user._id, approvalStatus: 'pendente' }),
-      approved: await Event.countDocuments({ organizer: req.user._id, approvalStatus: 'aprovado' }),
-      rejected: await Event.countDocuments({ organizer: req.user._id, approvalStatus: 'rejeitado' })
+      active: await Event.countDocuments({ organizer: req.user._id, status: 'active' }),
+      canceled: await Event.countDocuments({ organizer: req.user._id, status: 'canceled' }),
+      finished: await Event.countDocuments({ organizer: req.user._id, status: 'finished' }),
+      pending: await Event.countDocuments({ organizer: req.user._id, approvalStatus: 'pending' }),
+      approved: await Event.countDocuments({ organizer: req.user._id, approvalStatus: 'approved' }),
+      rejected: await Event.countDocuments({ organizer: req.user._id, approvalStatus: 'rejected' })
     }
   });
 });
@@ -641,11 +641,11 @@ const getUserParticipatingEvents = asyncHandler(async (req, res) => {
     participants: req.user._id
   };
   
-  // Filtro adicional por status, padrão é 'ativo'
-  query.status = req.query.status || 'ativo';
+  // Filtro adicional por status, padrão é 'active'
+  query.status = req.query.status || 'active';
   
   // Por padrão, mostrar apenas eventos aprovados
-  query.approvalStatus = 'aprovado';
+  query.approvalStatus = 'approved';
   
   // Filtro adicional por data (passados/futuros)
   if (req.query.when === 'past') {
@@ -675,19 +675,19 @@ const getUserParticipatingEvents = asyncHandler(async (req, res) => {
     counts: {
       upcoming: await Event.countDocuments({
         participants: req.user._id,
-        status: 'ativo',
-        approvalStatus: 'aprovado',
+        status: 'active',
+        approvalStatus: 'approved',
         date: { $gte: new Date() }
       }),
       past: await Event.countDocuments({
         participants: req.user._id,
-        status: { $in: ['ativo', 'finalizado'] },
-        approvalStatus: 'aprovado',
+        status: { $in: ['active', 'finished'] },
+        approvalStatus: 'approved',
         date: { $lt: new Date() }
       }),
       canceled: await Event.countDocuments({
         participants: req.user._id,
-        status: 'cancelado'
+        status: 'canceled'
       })
     }
   });

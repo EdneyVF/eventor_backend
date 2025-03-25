@@ -82,13 +82,13 @@ const eventSchema = new mongoose.Schema({
   }],
   status: {
     type: String,
-    enum: ['ativo', 'cancelado', 'finalizado', 'inativo'],
-    default: 'ativo'
+    enum: ['active', 'canceled', 'finished', 'inactive'],
+    default: 'inactive'
   },
   approvalStatus: {
     type: String,
-    enum: ['pendente', 'aprovado', 'rejeitado'],
-    default: 'pendente'
+    enum: ['pending', 'approved', 'rejected'],
+    default: 'pending'
   },
   approvedBy: {
     type: mongoose.Schema.Types.ObjectId,
@@ -120,26 +120,26 @@ eventSchema.virtual('participantsCount').get(function() {
 });
 
 eventSchema.virtual('isApproved').get(function() {
-  return this.approvalStatus === 'aprovado';
+  return this.approvalStatus === 'approved';
 });
 
 // Methods
 eventSchema.methods.approve = async function(adminId) {
-  this.approvalStatus = 'aprovado';
+  this.approvalStatus = 'approved';
   this.approvedBy = adminId;
   this.approvalDate = new Date();
   this.rejectionReason = null;
-  this.status = 'ativo';
-  await this.save();
+  this.status = 'active';
+  return this.save();
 };
 
 eventSchema.methods.reject = async function(adminId, reason) {
-  this.approvalStatus = 'rejeitado';
+  this.approvalStatus = 'rejected';
   this.approvedBy = adminId;
   this.approvalDate = new Date();
-  this.rejectionReason = reason;
-  this.status = 'inativo';
-  await this.save();
+  this.rejectionReason = reason || null;
+  this.status = 'inactive';
+  return this.save();
 };
 
 // Middleware
@@ -149,20 +149,20 @@ eventSchema.pre('save', async function(next) {
     const organizer = await User.findById(this.organizer);
     
     if (organizer && organizer.role === 'admin') {
-      this.approvalStatus = 'aprovado';
+      this.approvalStatus = 'approved';
       this.approvedBy = this.organizer;
       this.approvalDate = new Date();
-      this.status = 'ativo';
+      this.status = 'active';
     } else {
       // Para eventos criados por usuários normais, aguardando aprovação
-      this.status = 'inativo';
+      this.status = 'inactive';
     }
   } else if (this.isModified('approvalStatus')) {
     // Quando o status de aprovação é modificado, atualizar o status do evento
-    if (this.approvalStatus === 'aprovado') {
-      this.status = 'ativo';
-    } else if (this.approvalStatus === 'rejeitado' || this.approvalStatus === 'pendente') {
-      this.status = 'inativo';
+    if (this.approvalStatus === 'approved') {
+      this.status = 'active';
+    } else if (this.approvalStatus === 'rejected' || this.approvalStatus === 'pending') {
+      this.status = 'inactive';
     }
   }
   next();

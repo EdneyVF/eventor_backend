@@ -107,7 +107,7 @@ const seedData = async () => {
       price: 150,
       organizer: admin._id,
       tags: ['desenvolvimento', 'web', 'javascript', 'react'],
-      approvalStatus: 'aprovado',
+      approvalStatus: 'approved',
       approvedBy: admin._id,
       approvalDate: new Date()
     });
@@ -129,7 +129,7 @@ const seedData = async () => {
       price: 50,
       organizer: user._id,
       tags: ['música', 'festival', 'indie', 'cultura'],
-      approvalStatus: 'pendente'
+      approvalStatus: 'pending'
     });
 
     // Evento gratuito aprovado
@@ -148,7 +148,7 @@ const seedData = async () => {
       price: 0,
       organizer: admin._id,
       tags: ['esporte', 'corrida', 'beneficente', 'gratuito'],
-      approvalStatus: 'aprovado',
+      approvalStatus: 'approved',
       approvedBy: admin._id,
       approvalDate: new Date()
     });
