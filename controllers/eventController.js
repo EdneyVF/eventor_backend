@@ -700,6 +700,116 @@ const getUserParticipatingEvents = asyncHandler(async (req, res) => {
   });
 });
 
+// @desc    Listar todos os eventos (admin)
+// @route   GET /api/events/admin/all
+// @access  Admin
+const listAllEvents = asyncHandler(async (req, res) => {
+  const page = parseInt(req.query.page, 10) || 1;
+  const limit = parseInt(req.query.limit, 10) || 10;
+  const startIndex = (page - 1) * limit;
+  
+  // Inicializa query
+  let query = {};
+  
+  // Busca por texto
+  if (req.query.search) {
+    query.$or = [
+      { title: { $regex: req.query.search, $options: 'i' } },
+      { description: { $regex: req.query.search, $options: 'i' } }
+    ];
+  }
+  
+  // Filtros de categoria
+  if (req.query.categories) {
+    const categoryIds = req.query.categories.split(',');
+    query.category = { $in: categoryIds };
+  } else if (req.query.category) {
+    query.category = req.query.category;
+  }
+  
+  // Filtros de status (opcional)
+  if (req.query.status && req.query.status !== 'all') {
+    query.status = req.query.status;
+  }
+  
+  // Filtros de status de aprovação (opcional)
+  if (req.query.approvalStatus && req.query.approvalStatus !== 'all') {
+    query.approvalStatus = req.query.approvalStatus;
+  }
+  
+  // Filtros de organizer (opcional)
+  if (req.query.organizer) {
+    query.organizer = req.query.organizer;
+  }
+  
+  // Filtros de data
+  if (req.query.from || req.query.to) {
+    query.date = {};
+    
+    if (req.query.from) {
+      query.date.$gte = new Date(req.query.from);
+    }
+    
+    if (req.query.to) {
+      query.date.$lte = new Date(req.query.to);
+    }
+  }
+  
+  // Ordenação
+  let sortOption = {};
+  
+  // Opções de ordenação
+  switch (req.query.sort) {
+    case 'date_asc':
+      sortOption = { date: 1 };
+      break;
+    case 'date_desc':
+      sortOption = { date: -1 };
+      break;
+    case 'title_asc':
+      sortOption = { title: 1 };
+      break;
+    case 'title_desc':
+      sortOption = { title: -1 };
+      break;
+    case 'recent':
+      sortOption = { createdAt: -1 };
+      break;
+    default:
+      sortOption = { createdAt: -1 }; // Padrão: eventos mais recentes primeiro
+  }
+  
+  // Contagens para o dashboard
+  const counts = {
+    total: await Event.countDocuments({}),
+    active: await Event.countDocuments({ status: 'active' }),
+    inactive: await Event.countDocuments({ status: 'inactive' }),
+    canceled: await Event.countDocuments({ status: 'canceled' }),
+    finished: await Event.countDocuments({ status: 'finished' }),
+    pending: await Event.countDocuments({ approvalStatus: 'pending' }),
+    approved: await Event.countDocuments({ approvalStatus: 'approved' }),
+    rejected: await Event.countDocuments({ approvalStatus: 'rejected' })
+  };
+  
+  // Execute a busca
+  const total = await Event.countDocuments(query);
+  
+  const events = await Event.find(query)
+    .populate('category', 'name')
+    .populate('organizer', 'name email')
+    .sort(sortOption)
+    .skip(startIndex)
+    .limit(limit);
+  
+  res.json({
+    events,
+    page,
+    pages: Math.ceil(total / limit),
+    total,
+    counts
+  });
+});
+
 module.exports = {
   searchEvents,
   createEvent,
@@ -710,5 +820,6 @@ module.exports = {
   cancelParticipation,
   cancelEvent,
   getUserEvents,
-  getUserParticipatingEvents
+  getUserParticipatingEvents,
+  listAllEvents
 };

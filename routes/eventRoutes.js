@@ -11,7 +11,8 @@ const {
   cancelParticipation,
   cancelEvent,
   getUserEvents,
-  getUserParticipatingEvents
+  getUserParticipatingEvents,
+  listAllEvents
 } = require('../controllers/eventController');
 
 // Rota de busca pública
@@ -19,6 +20,9 @@ router.get('/', searchEvents);
 
 // Rotas que requerem autenticação
 router.use(protect);
+
+// Rota admin para listar todos os eventos
+router.get('/admin/all', admin, listAllEvents);
 
 // Rotas para listar eventos do usuário (devem vir ANTES das rotas com parâmetros)
 router.get('/my-events', getUserEvents);
