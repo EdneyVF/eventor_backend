@@ -572,7 +572,7 @@ const cancelEvent = asyncHandler(async (req, res) => {
   });
 });
 
-// @desc    Listar eventos criados pelo usuário
+// @desc    Listar eventos do usuário
 // @route   GET /api/events/my-events
 // @access  Private
 const getUserEvents = asyncHandler(async (req, res) => {
@@ -586,7 +586,7 @@ const getUserEvents = asyncHandler(async (req, res) => {
   };
   
   // Filtro adicional por status (se fornecido)
-  if (req.query.status && ['active', 'canceled', 'finished'].includes(req.query.status)) {
+  if (req.query.status && ['active', 'inactive', 'canceled', 'finished'].includes(req.query.status)) {
     query.status = req.query.status;
   }
 
@@ -619,6 +619,7 @@ const getUserEvents = asyncHandler(async (req, res) => {
     counts: {
       total: await Event.countDocuments({ organizer: req.user._id }),
       active: await Event.countDocuments({ organizer: req.user._id, status: 'active' }),
+      inactive: await Event.countDocuments({ organizer: req.user._id, status: 'inactive' }),
       canceled: await Event.countDocuments({ organizer: req.user._id, status: 'canceled' }),
       finished: await Event.countDocuments({ organizer: req.user._id, status: 'finished' }),
       pending: await Event.countDocuments({ organizer: req.user._id, approvalStatus: 'pending' }),
@@ -644,8 +645,10 @@ const getUserParticipatingEvents = asyncHandler(async (req, res) => {
   // Filtro adicional por status, padrão é 'active'
   query.status = req.query.status || 'active';
   
-  // Por padrão, mostrar apenas eventos aprovados
-  query.approvalStatus = 'approved';
+  // Por padrão, mostrar apenas eventos aprovados, exceto quando solicitando eventos inativos
+  if (query.status !== 'inactive') {
+    query.approvalStatus = 'approved';
+  }
   
   // Filtro adicional por data (passados/futuros)
   if (req.query.when === 'past') {
@@ -688,6 +691,10 @@ const getUserParticipatingEvents = asyncHandler(async (req, res) => {
       canceled: await Event.countDocuments({
         participants: req.user._id,
         status: 'canceled'
+      }),
+      inactive: await Event.countDocuments({
+        participants: req.user._id,
+        status: 'inactive'
       })
     }
   });
