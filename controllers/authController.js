@@ -32,12 +32,17 @@ const register = asyncHandler(async (req, res) => {
   });
 
   if (user) {
+    // Gerar tokens
+    const accessToken = generateToken(user);
+    const refreshToken = generateRefreshToken(user);
+
     res.status(201).json({
       _id: user._id,
       name: user.name,
       email: user.email,
       role: user.role,
-      token: generateToken(user._id),
+      token: accessToken,
+      refreshToken: refreshToken
     });
   } else {
     throw new ErrorResponse('Dados de usuário inválidos', 400);
@@ -71,12 +76,17 @@ const login = asyncHandler(async (req, res) => {
   user.lastLogin = new Date();
   await user.save();
 
+  // Gerar tokens
+  const accessToken = generateToken(user);
+  const refreshToken = generateRefreshToken(user);
+
   res.json({
     _id: user._id,
     name: user.name,
     email: user.email,
     role: user.role,
-    token: generateToken(user._id),
+    token: accessToken,
+    refreshToken: refreshToken
   });
 });
 
@@ -170,16 +180,102 @@ const updateProfile = asyncHandler(async (req, res) => {
 });
 
 // Gerar JWT
-const generateToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET, {
-    expiresIn: '24h',
-  });
+const generateToken = (user) => {
+  return jwt.sign(
+    { 
+      id: user._id,
+      role: user.role,
+      email: user.email
+    }, 
+    process.env.JWT_SECRET, 
+    {
+      expiresIn: process.env.JWT_EXPIRE || '24h',
+      audience: 'eventor-app',
+      issuer: 'eventor-api'
+    }
+  );
 };
+
+// Gerar refresh token
+const generateRefreshToken = (user) => {
+  // Use a consistent secret
+  const refreshSecret = process.env.REFRESH_TOKEN_SECRET || (process.env.JWT_SECRET + '_refresh');
+  
+  return jwt.sign(
+    { id: user._id }, 
+    refreshSecret,
+    { 
+      expiresIn: process.env.REFRESH_TOKEN_EXPIRE || '7d',
+      audience: 'eventor-app',
+      issuer: 'eventor-api'
+    }
+  );
+};
+
+// @desc    Atualizar token usando refresh token
+// @route   POST /api/auth/refresh-token
+// @access  Public
+const refreshToken = asyncHandler(async (req, res) => {
+  const { refreshToken } = req.body;
+
+  if (!refreshToken) {
+    throw new ErrorResponse('Refresh token é obrigatório', 400);
+  }
+
+  // Use a consistent secret
+  const refreshSecret = process.env.REFRESH_TOKEN_SECRET || (process.env.JWT_SECRET + '_refresh');
+  
+  try {
+    // Verificar refresh token com verificação flexível
+    let decoded;
+    try {
+      // Tentar com audience e issuer
+      decoded = jwt.verify(
+        refreshToken, 
+        refreshSecret,
+        {
+          audience: 'eventor-app',
+          issuer: 'eventor-api'
+        }
+      );
+    } catch (verifyError) {
+      // Fallback para tokens antigos
+      decoded = jwt.verify(
+        refreshToken, 
+        refreshSecret
+      );
+      console.log('Refresh token verificado em modo de compatibilidade');
+    }
+
+    // Buscar usuário
+    const user = await User.findById(decoded.id).select('-password');
+
+    if (!user) {
+      throw new ErrorResponse('Usuário não encontrado', 404);
+    }
+
+    // Gerar novos tokens
+    const newAccessToken = generateToken(user);
+    const newRefreshToken = generateRefreshToken(user);
+
+    res.json({
+      token: newAccessToken,
+      refreshToken: newRefreshToken
+    });
+  } catch (error) {
+    console.error('Erro ao renovar token:', error.name, error.message);
+    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+      throw new ErrorResponse('Refresh token inválido ou expirado', 401);
+    }
+    throw error;
+  }
+});
 
 module.exports = {
   register,
   login,
   getMe,
   updatePassword,
-  updateProfile
+  updateProfile,
+  refreshToken
 };

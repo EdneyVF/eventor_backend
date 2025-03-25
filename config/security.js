@@ -4,7 +4,7 @@ const sanitize = require('express-mongo-sanitize');
 // Rate Limiter para tentativas de login
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 20, // aumentado para 20 tentativas
+  max: 25, // aumentado para 20 tentativas
   message: {
     message: 'Muitas tentativas de login. Por favor, tente novamente em 15 minutos.'
   },

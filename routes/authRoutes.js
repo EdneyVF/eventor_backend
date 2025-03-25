@@ -1,13 +1,14 @@
 const express = require('express');
 const router = express.Router();
+const { protect } = require('../middlewares/authMiddleware');
 const { 
   register, 
   login, 
   getMe,
   updatePassword,
-  updateProfile
+  updateProfile,
+  refreshToken
 } = require('../controllers/authController');
-const { protect } = require('../middlewares/authMiddleware');
 
 /**
  * @route   POST /api/auth/register
@@ -24,6 +25,26 @@ router.post('/register', register);
  * @body    { email, password }
  */
 router.post('/login', login);
+
+/**
+ * @route   POST /api/auth/refresh-token
+ * @desc    Refresh token
+ * @access  Public
+ * @body    { refreshToken }
+ */
+router.post('/refresh-token', refreshToken);
+
+/**
+ * @route   GET /api/auth/force-logout
+ * @desc    Force logout
+ * @access  Public
+ */
+router.get('/force-logout', (req, res) => {
+  res.status(401).json({ 
+    message: 'Por favor, faça login novamente.',
+    forceLogout: true 
+  });
+});
 
 /**
  * @route   GET /api/auth/me
