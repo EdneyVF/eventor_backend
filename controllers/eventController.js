@@ -421,19 +421,19 @@ const updateEvent = asyncHandler(async (req, res) => {
     throw new ErrorResponse('Nova capacidade não pode ser menor que o número atual de participantes', 400);
   }
 
-  // Se não for admin, alterações significativas requerem nova aprovação
-  if (req.user.role !== 'admin') {
-    const significantChanges = ['title', 'date', 'price'].some(
-      field => req.body[field] !== undefined
-    ) || (req.body.location !== undefined);
-    
-    if (significantChanges) {
-      req.body.approvalStatus = 'pending';
-      req.body.approvedBy = null;
-      req.body.approvalDate = null;
-      // Definir status como inativo quando aprovação pendente
-      req.body.status = 'inactive';
-    }
+  // Se for admin, o evento é automaticamente aprovado e ativado
+  if (req.user.role === 'admin') {
+    req.body.approvalStatus = 'approved';
+    req.body.approvedBy = req.user._id;
+    req.body.approvalDate = new Date();
+    req.body.status = 'active';
+  } else {
+    // Se não for admin, qualquer alteração requer nova aprovação
+    req.body.approvalStatus = 'pending';
+    req.body.approvedBy = null;
+    req.body.approvalDate = null;
+    // Definir status como inativo quando aprovação pendente
+    req.body.status = 'inactive';
   }
 
   event = await Event.findByIdAndUpdate(
