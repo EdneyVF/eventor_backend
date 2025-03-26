@@ -75,7 +75,7 @@ const rejectEvent = asyncHandler(async (req, res) => {
 // @access  Private
 const getApprovalStatus = asyncHandler(async (req, res) => {
   const event = await Event.findById(req.params.id)
-    .select('approvalStatus approvedBy approvalDate rejectionReason')
+    .select('approvalStatus approvedBy approvalDate rejectionReason participants')
     .populate('approvedBy', 'name');
 
   if (!event) {

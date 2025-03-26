@@ -205,6 +205,7 @@ const createEvent = asyncHandler(async (req, res) => {
   const {
     title,
     description,
+    imageUrl,
     date,
     endDate,
     location,
@@ -291,6 +292,14 @@ const createEvent = asyncHandler(async (req, res) => {
     }
   }
 
+  // Validar imageUrl se fornecida
+  if (imageUrl) {
+    const urlPattern = /^(https?|ftp):\/\/[^\s/$.?#].[^\s]*$/i;
+    if (!urlPattern.test(imageUrl)) {
+      throw new ErrorResponse('URL de imagem inválida', 400);
+    }
+  }
+
   // Validar tags
   let eventTags = [];
   if (tags) {
@@ -317,6 +326,7 @@ const createEvent = asyncHandler(async (req, res) => {
   const eventData = {
     title,
     description,
+    imageUrl,
     date: eventDate,
     location,
     category,
@@ -419,6 +429,14 @@ const updateEvent = asyncHandler(async (req, res) => {
 
   if (req.body.capacity !== null && req.body.capacity !== undefined && req.body.capacity < event.participants.length) {
     throw new ErrorResponse('Nova capacidade não pode ser menor que o número atual de participantes', 400);
+  }
+
+  // Log para debugar o campo imageUrl
+  console.log('Valor recebido para imageUrl:', req.body.imageUrl);
+  
+  // Garantir que imageUrl null seja tratado corretamente
+  if (req.body.imageUrl === null) {
+    console.log('Setting imageUrl to null');
   }
 
   // Se for admin, o evento é automaticamente aprovado e ativado
@@ -813,6 +831,83 @@ const listAllEvents = asyncHandler(async (req, res) => {
   });
 });
 
+// @desc    Ativar um evento
+// @route   PUT /api/events/:id/activate
+// @access  Admin
+const activateEvent = asyncHandler(async (req, res) => {
+  const event = await Event.findById(req.params.id);
+
+  if (!event) {
+    throw new ErrorResponse('Evento não encontrado', 404);
+  }
+
+  // Verificar permissão (apenas admin)
+  if (req.user.role !== 'admin') {
+    throw new ErrorResponse('Não autorizado', 403);
+  }
+
+  // Verificar se já está ativo
+  if (event.status === 'active') {
+    throw new ErrorResponse('Evento já está ativo', 400);
+  }
+
+  // Verificar se evento está aprovado
+  if (event.approvalStatus !== 'approved') {
+    throw new ErrorResponse('Apenas eventos aprovados podem ser ativados', 400);
+  }
+
+  // Verificar se já está cancelado
+  if (event.status === 'canceled') {
+    throw new ErrorResponse('Eventos cancelados não podem ser ativados', 400);
+  }
+
+  // Ativar o evento
+  event.status = 'active';
+  await event.save();
+
+  res.json({
+    success: true,
+    message: 'Evento ativado com sucesso',
+    event
+  });
+});
+
+// @desc    Inativar um evento
+// @route   PUT /api/events/:id/deactivate
+// @access  Admin
+const deactivateEvent = asyncHandler(async (req, res) => {
+  const event = await Event.findById(req.params.id);
+
+  if (!event) {
+    throw new ErrorResponse('Evento não encontrado', 404);
+  }
+
+  // Verificar permissão (apenas admin)
+  if (req.user.role !== 'admin') {
+    throw new ErrorResponse('Não autorizado', 403);
+  }
+
+  // Verificar se já está inativo
+  if (event.status === 'inactive') {
+    throw new ErrorResponse('Evento já está inativo', 400);
+  }
+
+  // Verificar se já está cancelado
+  if (event.status === 'canceled') {
+    throw new ErrorResponse('Eventos cancelados não podem ser inativados', 400);
+  }
+
+  // Inativar o evento
+  event.status = 'inactive';
+  await event.save();
+
+  res.json({
+    success: true,
+    message: 'Evento inativado com sucesso',
+    event
+  });
+});
+
 module.exports = {
   searchEvents,
   createEvent,
@@ -824,5 +919,7 @@ module.exports = {
   cancelEvent,
   getUserEvents,
   getUserParticipatingEvents,
-  listAllEvents
+  listAllEvents,
+  activateEvent,
+  deactivateEvent
 };

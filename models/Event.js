@@ -14,6 +14,16 @@ const eventSchema = new mongoose.Schema({
     trim: true,
     minlength: [10, 'A descrição deve ter no mínimo 10 caracteres']
   },
+  imageUrl: {
+    type: String,
+    validate: {
+      validator: function(v) {
+        return !v || /^(https?|ftp):\/\/[^\s/$.?#].[^\s]*$/i.test(v);
+      },
+      message: props => `${props.value} não é uma URL válida!`
+    },
+    default: null
+  },
   date: { 
     type: Date, 
     required: [true, 'A data do evento é obrigatória'],
@@ -112,11 +122,11 @@ const eventSchema = new mongoose.Schema({
 
 // Virtuals
 eventSchema.virtual('isFullyBooked').get(function() {
-  return this.capacity !== null && this.participants.length >= this.capacity;
+  return this.capacity !== null && this.participants && this.participants.length >= this.capacity;
 });
 
 eventSchema.virtual('participantsCount').get(function() {
-  return this.participants.length;
+  return this.participants ? this.participants.length : 0;
 });
 
 eventSchema.virtual('isApproved').get(function() {

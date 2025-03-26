@@ -12,7 +12,9 @@ const {
   cancelEvent,
   getUserEvents,
   getUserParticipatingEvents,
-  listAllEvents
+  listAllEvents,
+  activateEvent,
+  deactivateEvent
 } = require('../controllers/eventController');
 
 // Rota de busca pública
@@ -38,5 +40,9 @@ router.delete('/:id', deleteEvent);
 router.post('/:id/participate', participateEvent);
 router.delete('/:id/participate', cancelParticipation);
 router.put('/:id/cancel', cancelEvent);
+
+// Rotas admin para ativar/inativar eventos
+router.put('/:id/activate', admin, activateEvent);
+router.put('/:id/deactivate', admin, deactivateEvent);
 
 module.exports = router; 
