@@ -48,14 +48,14 @@ app.use(sanitize());
 app.use(generalLimiter);
 
 // Rota de status da API
-app.get('/', (req, res) => {
+app.get('/api', (req, res) => {
   res.json({ message: "API do Eventor funcionando!" });
 });
 
 // Aplicar limitador de login apenas nas rotas de autenticação
 app.use('/api/auth', loginLimiter);
 
-// Rotas da aplicação
+// Rotas da API
 app.use(routes);
 
 // Middleware de erro
