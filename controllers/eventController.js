@@ -113,7 +113,10 @@ const searchEvents = asyncHandler(async (req, res) => {
   // Filtro de capacidade disponível
   if (req.query.hasAvailability === 'true') {
     query.$expr = {
-      $lt: [{ $size: '$participants' }, '$capacity']
+      $or: [
+        { $eq: ['$capacity', null] }, // Unlimited capacity
+        { $lt: [{ $size: '$participants' }, '$capacity'] } // Has spots available
+      ]
     };
   }
   
@@ -212,8 +215,8 @@ const createEvent = asyncHandler(async (req, res) => {
   } = req.body;
 
   // Validar campos obrigatórios
-  if (!title || !description || !date || !location || !category || !capacity) {
-    throw new ErrorResponse('Título, descrição, data, localização, categoria e capacidade são obrigatórios', 400);
+  if (!title || !description || !date || !location || !category) {
+    throw new ErrorResponse('Título, descrição, data, localização e categoria são obrigatórios', 400);
   }
 
   // Validar título e descrição
@@ -225,9 +228,9 @@ const createEvent = asyncHandler(async (req, res) => {
     throw new ErrorResponse('Descrição deve ter pelo menos 10 caracteres', 400);
   }
 
-  // Validar capacidade
-  if (capacity < 1) {
-    throw new ErrorResponse('Capacidade deve ser pelo menos 1', 400);
+  // Validar capacidade se fornecida
+  if (capacity !== null && capacity !== undefined && capacity < 0) {
+    throw new ErrorResponse('Capacidade deve ser um valor não-negativo', 400);
   }
 
   // Validar categoria
@@ -414,7 +417,7 @@ const updateEvent = asyncHandler(async (req, res) => {
     }
   }
 
-  if (req.body.capacity && req.body.capacity < event.participants.length) {
+  if (req.body.capacity !== null && req.body.capacity !== undefined && req.body.capacity < event.participants.length) {
     throw new ErrorResponse('Nova capacidade não pode ser menor que o número atual de participantes', 400);
   }
 
@@ -501,7 +504,7 @@ const participateEvent = asyncHandler(async (req, res) => {
   }
 
   // Verificar capacidade
-  if (event.participants.length >= event.capacity) {
+  if (event.capacity !== null && event.participants.length >= event.capacity) {
     throw new ErrorResponse('Evento está lotado', 400);
   }
 

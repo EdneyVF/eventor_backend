@@ -64,7 +64,7 @@ const eventSchema = new mongoose.Schema({
   capacity: {
     type: Number,
     min: [1, 'A capacidade mínima é 1 participante'],
-    required: [true, 'A capacidade do evento é obrigatória']
+    default: null // null represents unlimited capacity
   },
   price: {
     type: Number,
@@ -112,7 +112,7 @@ const eventSchema = new mongoose.Schema({
 
 // Virtuals
 eventSchema.virtual('isFullyBooked').get(function() {
-  return this.participants.length >= this.capacity;
+  return this.capacity !== null && this.participants.length >= this.capacity;
 });
 
 eventSchema.virtual('participantsCount').get(function() {
