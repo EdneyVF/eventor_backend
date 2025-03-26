@@ -42,11 +42,11 @@ const validatePassword = (password) => {
     if (password.length < minLength) errors.push(`mínimo de ${minLength} caracteres`);
     if (!hasNumber) errors.push('pelo menos um número');
     if (!hasLetter) errors.push('pelo menos uma letra');
-    if (!hasSpecialChar) errors.push('pelo menos um caractere especial');
+    if (!hasSpecialChar) errors.push('pelo menos um caractere especial (!@#$%^&*.,)');
 
     return {
       isValid: false,
-      message: `Senha deve conter: ${errors.join(', ')}`
+      message: `Senha inválida. Requisitos: ${errors.join(', ')}.`
     };
   }
 
