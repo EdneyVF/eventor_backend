@@ -488,9 +488,9 @@ const deleteEvent = asyncHandler(async (req, res) => {
     throw new ErrorResponse('Não autorizado', 403);
   }
 
-  // Não permitir deleção de eventos com participantes
-  if (event.participants.length > 0) {
-    throw new ErrorResponse('Não é possível deletar eventos com participantes', 400);
+  // Verificar se tem participantes e status do evento
+  if (event.participants.length > 0 && event.status !== 'inactive') {
+    throw new ErrorResponse('Eventos com participantes só podem ser excluídos quando estiverem inativos', 400);
   }
 
   await event.deleteOne();
